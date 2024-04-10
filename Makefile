@@ -7,10 +7,10 @@ venv:
 install: venv
 	$(VENV) && pip3 install -r requirements.txt
 
-dataset:
-	$(VENV) && python3 dataset.py
+dataset: install
+	$(VENV) && python3 dataset.py oai
 
-install-eval:
+install-eval: venv
 	curl -L -O https://github.com/openai/evals/archive/refs/heads/main.zip
 	unzip -q main.zip
 	rm -vf main.zip

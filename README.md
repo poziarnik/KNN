@@ -11,7 +11,7 @@ $ make install-eval
 ### Generate spolied words
 ```console
 $ make dataset
-Output file: 'data/word-spoiler.jsonl'
+Output file: 'data/word-spoiler/samples.jsonl'
 ```
 
 ### Evaluate dataset
