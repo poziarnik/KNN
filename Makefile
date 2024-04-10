@@ -4,13 +4,11 @@ VENV = (. .venv/bin/activate)
 venv:
 	python3 -m venv .venv
 
-install: venv
-	$(VENV) && pip3 install -r requirements.txt
+checkpoint-dataset:
+	$(VENV) && pip3 install -r dataset/requirements.txt
+	$(VENV) && python3 dataset/checkpoint.py --dir data/ --eval
 
-dataset: install
-	$(VENV) && python3 dataset.py oai
-
-install-eval: venv
+install-eval:
 	curl -L -O https://github.com/openai/evals/archive/refs/heads/main.zip
 	unzip -q main.zip
 	rm -vf main.zip
