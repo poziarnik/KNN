@@ -5,8 +5,8 @@ venv:
 	python3 -m venv .venv
 
 checkpoint-dataset:
-	$(VENV) && pip3 install -r dataset/requirements.txt
-	$(VENV) && python3 dataset/checkpoint.py --dir data/ --eval
+	$(VENV) && pip3 install -r dataset.txt
+	$(VENV) && python3 dataset.py --dir data/ --eval
 
 install-eval:
 	curl -L -O https://github.com/openai/evals/archive/refs/heads/main.zip
