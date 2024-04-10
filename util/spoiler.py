@@ -1,7 +1,14 @@
 import random
+from typing import Iterator
 
 class WordSpoiler:
     def __init__(self, spoil_prob: float = 0) -> None:
+        """
+        Initializes the object with a spoil probability.
+
+        Parameters:
+            spoil_prob (float): The probability of the object spoiling.
+        """
         self.spoil_prob = spoil_prob
 
     def spoil(self, word: str) -> str:
@@ -80,3 +87,18 @@ class WordSpoiler:
         word = word[:index] + new_char + word[index:]
 
         return word
+
+    def spoil_words_generator(self, words: list[str], num_samples: int) -> Iterator[tuple[str, str]]:
+        """
+        Generate a spoiled words generator that yields a tuple of a word and its spoiled version.
+
+        Parameters:
+            words (list[str]): A list of words to choose from.
+            num_samples (int): The number of samples to generate.
+
+        Yields:
+            tuple[str, str]: A tuple containing a word from the list and its spoiled version.
+        """
+        for _ in range(num_samples):
+            word = random.choice(words)
+            yield (word, self.spoil(word))

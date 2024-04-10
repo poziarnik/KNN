@@ -1,5 +1,4 @@
 .venv/
 evals-main/
-evals/
 __pycache__/
-dataset/
+data/

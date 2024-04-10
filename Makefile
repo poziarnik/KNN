@@ -1,15 +1,26 @@
 VENV = (. .venv/bin/activate)
 
+# python3.11
 venv:
 	python3 -m venv .venv
 
 install: venv
-	pip install -r requirements.txt
+	$(VENV) && pip3 install -r requirements.txt
 
-eval:
+dataset:
+	$(VENV) && python3 dataset.py
+
+install-eval:
 	curl -L -O https://github.com/openai/evals/archive/refs/heads/main.zip
 	unzip -q main.zip
 	rm -vf main.zip
+	$(VENV) && cd evals-main && pip3 install evals
 
 clean:
+	rm -vrf data/
 	rm -vrf evals-main *.zip
+
+venv-clean:
+	rm -rf .venv/
+
+clean-all: clean venv-clean
