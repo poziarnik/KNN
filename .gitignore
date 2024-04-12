@@ -2,3 +2,5 @@
 evals-main/
 __pycache__/
 data/
+*.csv
+*.json
