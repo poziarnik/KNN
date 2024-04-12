@@ -1,61 +1,61 @@
+from huggingface_hub import hf_hub_download
+from datasets import load_dataset, load_from_disk
 from pathlib import Path
-import requests # type: ignore
-import zipfile
-from io import BytesIO
-import csv
-from util import WordSpoiler
-import argparse
+import random
+import string
 
-# download URL
-URL = "https://wiki.korpus.cz/lib/exe/fetch.php/seznamy:syn2015_word_abc_utf8.zip"
+BASE_DATA_DIR = Path("./data")
+BASE_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# basic parser
-parser = argparse.ArgumentParser()
-parser.add_argument("--dir", required=True)
-parser.add_argument("--eval", action="store_true", default=False)
+REPO_ID = "BUT-FIT/BUT-LCC"
+FILE_NAME = "train_0.jsonl.gz"
 
-args = parser.parse_args()
+FILTERED = BASE_DATA_DIR / "cs-wiki"
 
-BASE_DIR = Path(args.dir).absolute()
-BASE_DIR.mkdir(exist_ok=True, parents=True)
+if not FILTERED.exists():
+    print("Downloading dataset...")
+    dataset_path = hf_hub_download(repo_id=REPO_ID, filename=FILE_NAME, repo_type="dataset")
+    print(f"Dataset was downloaded '{dataset_path}'")
 
-# dataset path
-DATASET = BASE_DIR / "syn2015_word_abc_utf8.tsv"
-OUTPUT_JSONL = BASE_DIR / "word-spoiler" / "samples.jsonl"
-OUTPUT = BASE_DIR / "output.csv"
+    print("Loading dataset...")
+    dataset = load_dataset('json', data_files=dataset_path, split='train')
 
-if not DATASET.exists():
-    print(f"Downloading dataset from {URL}")
-    response = requests.get(URL)
-    if response.status_code != 200:
-        raise RuntimeError(f"Download failed with status code: {response.status_code}")
+    print("Filtering dataset...")
+    dataset = dataset.filter(lambda x: x["part"] == "cswiki-20230101")
 
-    print("Download successful. Extracting dataset...")
+    print(f"Saving dataset to '{FILTERED.absolute()}'")
+    dataset.save_to_disk(FILTERED)
 
-    zip_file = zipfile.ZipFile(BytesIO(response.content))
-    zip_file.extractall(path=DATASET.parent)
-    zip_file.close()
-    print("Dataset extracted.")
 
-# load words from the TSV file
-with DATASET.open('r', encoding="utf-8") as f:
-    reader = csv.reader(f, delimiter="\t")
-    
-    # read words longer than 2 characters
-    words = [row[1] for row in reader if len(row[1]) > 2]
+# Function to introduce multiple random errors into text
+def spoil_text(text):
+    # Number of errors to introduce (can be adjusted)
+    num_errors = random.randint(6, 8)  # Randomly choose 1 to 3 errors
 
-    spoiler = WordSpoiler(spoil_prob=0.8) # probability of spoiling the word is 0.8
-spoiled_words = spoiler.spoil_words_generator(words, num_samples=40000)
+    for _ in range(num_errors):
+        error_type = random.choice(["typo", "missing", "extra"])
 
-if args.eval is True:
-    OUTPUT_JSONL.parent.mkdir(exist_ok=True, parents=True)
-    # store data in the jsonl format (used in openai evals framework)
-    with OUTPUT_JSONL.open('w') as f:
-        for correct, spoiled in spoiled_words:
-            f.write(f'{{"input": [{{"role": "system", "content": "Úloha: Oprav následující chybně napsané slovo"}}, {{"role": "user", "content": "{spoiled}"}}], "ideal": "{correct}"}}\n')
-else:
-    with OUTPUT.open('w') as f:
-        writer = csv.writer(f, delimiter='\t')
-        writer.writerows(spoiled_words)
-            
-print(f"Output file: '{f.name}'")
+        if error_type == "typo":
+            # Introduce a typo by changing one random character
+            if len(text) > 1:
+                idx = random.randint(0, len(text) - 1)
+                text = text[:idx] + random.choice(string.ascii_lowercase) + text[idx+1:]
+
+        elif error_type == "missing":
+            # Remove one random character (simulate a missing character)
+            if len(text) > 1:
+                idx = random.randint(0, len(text) - 1)
+                text = text[:idx] + text[idx+1:]
+
+        elif error_type == "extra":
+            # Add one random character (simulate an extra character)
+            idx = random.randint(0, len(text))
+            text = text[:idx] + random.choice(string.ascii_lowercase) + text[idx:]
+
+    return text
+
+dataset = load_from_disk(FILTERED)
+df = dataset.to_pandas()
+df = df[["text"]]
+df["spoiled text"] =  df["text"].apply(spoil_text)
+df.to_csv("output.csv", index=False, sep=";")
