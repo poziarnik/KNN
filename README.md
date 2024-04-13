@@ -1,25 +1,26 @@
 # KNN - word / text correction
 
-## Checkpoint
+## Base-line
 ### Dataset
-As our dataset for evaluation we have used [Korpus SYN2015](https://wiki.korpus.cz/doku.php/cnk:syn2015#korpus_syn2015)
+As our dataset we are using texts from czech wikipedia.
 
-#### Generate spolied words
+#### Generate text with errors
+ - `50%` of the dataset contains text with introduced errors
+ - `30%` of the text has some errors
 ```console
-$ make checkpoint-dataset
-Output file: '$PWD/data/word-spoiler/samples.jsonl'
+$ make create-dataset
+Introducing Errors: 100%|██████████████████████████| 25203/25203 [00:02<00:00, 12192.85it/s]
+Saving dataset...
 ```
 
-#### Install evaluation framework
+#### Evaluate GPT-3 on generated data
+ - send API calls to GPT-3 to correct the provided text
 ```console
-$ make install-eval
-```
-
-#### Evaluate dataset
-```console
-$ source .venv/bin/activate
-(.venv) $ export OPENAI_API_KEY=<your-key>
-(.venv) $ oaieval gpt-3.5-turbo word-spoiler --max_samples 10000 --registry_path .
+$ make evaluate-dataset
+Loading dataset...
+Randomizing dataset...
+Sending API calls to GPT.: 100%|██████████████████████████| 50/50 [00:41<00:00,  1.21it/s]
+Saving evaluation data...
 ```
 
 ## Experiments
