@@ -58,4 +58,4 @@ dataset = load_from_disk(FILTERED)
 df = dataset.to_pandas()
 df = df[["text"]]
 df["spoiled text"] =  df["text"].apply(spoil_text)
-df.to_csv("output.csv", index=False, sep=";")
+df.to_csv("dataset.csv", index=False, sep=";")

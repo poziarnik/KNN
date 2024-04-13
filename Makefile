@@ -1,22 +1,14 @@
 VENV = (. .venv/bin/activate)
 
-# python3.11
 venv:
 	python3 -m venv .venv
 
-checkpoint-dataset:
+create-dataset:
 	$(VENV) && pip3 install -r dataset.txt
-	$(VENV) && python3 dataset.py --dir data/ --eval
-
-install-eval:
-	curl -L -O https://github.com/openai/evals/archive/refs/heads/main.zip
-	unzip -q main.zip
-	rm -vf main.zip
-	$(VENV) && cd evals-main && pip3 install evals
+	$(VENV) && python3 dataset.py
 
 clean:
-	rm -vrf data/
-	rm -vrf evals-main *.zip
+	rm -vrf *.zip *.csv data/
 
 venv-clean:
 	rm -rf .venv/

@@ -1,31 +1,54 @@
-import pandas as pd
+from openai import OpenAI
+from openai.types.chat import ChatCompletion
+from os import environ
 from typing import Iterator
-from termcolor import colored
+from multiprocessing import Pool, Manager
+import pandas as pd
+from functools import partial
+from tqdm import tqdm
 
-def get_from_events(iterator: Iterator) -> Iterator[str]:
-    try:
-        while True:
-            word = next(iterator)[1]['data']['prompt'][1]['content']
-            result = next(iterator)[1]['data']
-            color = "red" if result['correct'] == False else "green"
+client = OpenAI(
+    api_key=environ["OPENAI_API_KEY"]
+)
 
-            expected = result['expected']
-            picked = result['sampled']
+df = pd.read_csv("dataset.csv", sep=";")
+df = df.sample(frac=1).reset_index(drop=True)
 
-            yield f"{word}\t{expected}\t{colored(picked, color)}"
-    except StopIteration:
-        StopIteration()
+def generator(num: int) -> Iterator[tuple[str, str]]:
+    for index, row in df.iterrows():
+        yield row["text"], row["spoiled text"]
 
-events = "/tmp/evallogs/240331162620JA276Z7I_gpt-3.5-turbo_spell-check.jsonl"
+        if index == num:
+            break
 
-print(f"Word\tExpected\tPicked")
+def evaluate(lock, data: tuple[str, str]) -> None:
+    response: ChatCompletion = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {
+                "role": "user",
+                "content": f"Jsi poslušný asistent\n"
+                f"Oprav chyby v textu ak tam jsou: '{data[1]}'"
+            }
+        ]
+    )
 
-with open(events) as f:
-    events_df = pd.read_json(f, lines=True)
+    lock.acquire()
+    with open("evaluation.csv", "a") as f:
+        f.write(f'"{data[0]}";{data[1]};{response.choices[0].message.content}\n')
+    lock.release()
 
-iterator = events_df.iterrows()
-next(iterator)
-next(iterator)
+g = generator(num=10)
 
-for i in get_from_events(iterator):
-    print(i)
+# TODO: somehow make it work using built-in csv module (between multiple processes)
+with open("evaluation.csv", "w") as f:
+    f.write(f"text;spoiled text;correction\n")
+
+
+with Manager() as m:
+    lock = m.Lock()
+
+    with Pool(processes=4) as p:
+        func = partial(evaluate, lock)
+        for _ in tqdm(p.imap_unordered(func, g), total=10):
+            pass

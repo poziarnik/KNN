@@ -1,8 +1,0 @@
-word-spoiler:
-  id: word-spoiler.dev.v0
-  metrics: [accuracy]
-
-word-spoiler.dev.v0:
-  class: evals.elsuite.basic.match:Match
-  args:
-    samples_jsonl: word-spoiler/samples.jsonl
