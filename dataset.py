@@ -32,7 +32,6 @@ if not FILTERED.exists():
 # Function to introduce errors into text
 def introduce_errors(text: str):
     # Simulate introducing errors (e.g., typos, punctuation changes)
-    # Here's a simple example where we randomly insert typos into words
     words = text.split(' ')
     modified_words = []
     for word in words:
