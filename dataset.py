@@ -3,6 +3,8 @@ from datasets import load_dataset, load_from_disk
 from pathlib import Path
 import random
 import string
+from tqdm import tqdm
+
 
 BASE_DATA_DIR = Path("./data")
 BASE_DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -27,35 +29,34 @@ if not FILTERED.exists():
     dataset.save_to_disk(FILTERED)
 
 
-# Function to introduce multiple random errors into text
-def spoil_text(text):
-    # Number of errors to introduce (can be adjusted)
-    num_errors = random.randint(6, 8)  # Randomly choose 1 to 3 errors
-
-    for _ in range(num_errors):
-        error_type = random.choice(["typo", "missing", "extra"])
-
-        if error_type == "typo":
-            # Introduce a typo by changing one random character
-            if len(text) > 1:
-                idx = random.randint(0, len(text) - 1)
-                text = text[:idx] + random.choice(string.ascii_lowercase) + text[idx+1:]
-
-        elif error_type == "missing":
-            # Remove one random character (simulate a missing character)
-            if len(text) > 1:
-                idx = random.randint(0, len(text) - 1)
-                text = text[:idx] + text[idx+1:]
-
-        elif error_type == "extra":
-            # Add one random character (simulate an extra character)
-            idx = random.randint(0, len(text))
-            text = text[:idx] + random.choice(string.ascii_lowercase) + text[idx:]
-
-    return text
+# Function to introduce errors into text
+def introduce_errors(text: str):
+    # Simulate introducing errors (e.g., typos, punctuation changes)
+    # Here's a simple example where we randomly insert typos into words
+    words = text.split()
+    modified_words = []
+    for word in words:
+        if random.random() < 0.3:  # Adjust error introduction rate as needed
+            # Introduce a typo by randomly changing a character in the word
+            random_char_index = random.randint(0, len(word) - 1)
+            modified_word = word[:random_char_index] + random.choice(string.ascii_lowercase) + word[random_char_index + 1:]
+            modified_words.append(modified_word)
+        else:
+            modified_words.append(word)
+    return ' '.join(modified_words)
 
 dataset = load_from_disk(FILTERED)
 df = dataset.to_pandas()
 df = df[["text"]]
-df["spoiled text"] =  df["text"].apply(spoil_text)
+
+ERR_RATE = 0.5  # 50% of texts will have errors
+
+# Randomly select texts to introduce errors into
+texts_to_modify = df.sample(frac=ERR_RATE, random_state=42).index
+
+# Introduce errors into selected texts using tqdm for progress tracking
+tqdm.pandas(desc="Introducing Errors")
+df.loc[texts_to_modify, 'label'] = df.loc[texts_to_modify, 'text'].progress_apply(introduce_errors)
+
+print("Saving dataset...")
 df.to_csv("dataset.csv", index=False, sep=";")
