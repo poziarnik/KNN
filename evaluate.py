@@ -2,13 +2,13 @@ from openai import OpenAI
 from openai.types.chat import ChatCompletion
 from os import environ
 from typing import Iterator
-from multiprocessing import Pool, Manager
+from multiprocessing import Pool, Manager, cpu_count
 import pandas as pd
 from functools import partial
 from tqdm import tqdm
 import csv
 
-NUM_EXAMPLES = 10
+NUM_EXAMPLES = 5
 
 client = OpenAI(
     api_key=environ["OPENAI_API_KEY"]
@@ -23,7 +23,7 @@ df = df.sample(frac=1).reset_index(drop=True)
 def generator(num: int) -> Iterator[tuple[str, str]]:
     c = 0
     for _, row in df.iterrows():
-        if len(row["text"]) < 10000: # for input length limitation
+        if len(row["text"]) < 5000: # for input length limitation
             c+=1
             yield row["text"], row["spoiled text"]
 
@@ -57,8 +57,9 @@ with open("evaluation.csv", "w") as f:
 
 with Manager() as m:
     lock = m.Lock()
+    func = partial(evaluate, lock)
 
-    with Pool(processes=4) as p:
-        func = partial(evaluate, lock)
-        for _ in tqdm(p.imap_unordered(func, g), total=NUM_EXAMPLES):
-            pass
+    with Pool(processes=cpu_count()) as p:
+        with tqdm(total=NUM_EXAMPLES) as pbar:
+            for _ in p.imap_unordered(func, g):
+                pbar.update()

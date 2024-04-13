@@ -2,3 +2,6 @@ datasets==2.18.0
 huggingface-hub==0.22.2
 openai==1.14.3
 tqdm==4.66.2
+requests==2.31.0
+pandas==2.2.1
+datasets==2.18.0
