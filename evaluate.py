@@ -1,65 +1,58 @@
 from openai import OpenAI
-from openai.types.chat import ChatCompletion
 from os import environ
 from typing import Iterator
-from multiprocessing import Pool, Manager, cpu_count
+from multiprocessing import Pool, cpu_count
 import pandas as pd
-from functools import partial
 from tqdm import tqdm
-import csv
 
 NUM_EXAMPLES = 5
 
-client = OpenAI(
-    api_key=environ["OPENAI_API_KEY"]
-)
+# Set your OpenAI API key
+client = OpenAI(api_key=environ["OPENAI_API_KEY"])
+
+def data_generator() -> Iterator[tuple[str, str]]:
+    c = 0
+    for _, row in df.iterrows():
+        if c == NUM_EXAMPLES:
+            break
+
+        if len(row["text"]) < 5000: # for input length limitation
+            yield row["text"], row["error"]
+            c += 1
+
+# Function to evaluate text using OpenAI API
+def evaluate(data: tuple[str, str]) -> tuple[str, str, str | None]:
+    text, error = data
+
+    prompt = (
+        f"Jsi poslušný asistent\n"
+        f"Oprav chyby v textu, pokud tam jsou: `{error}`"
+    )
+
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    corrected_text = response.choices[0].message.content
+
+    return text, error, corrected_text
+
 
 print("Loading dataset...")
 df = pd.read_csv("dataset.csv", sep=";")
 
 print("Randomizing dataset...")
-df = df.sample(frac=1).reset_index(drop=True)
+df = df.sample(frac=1, random_state=42).reset_index(drop=True)
 
-def generator(num: int) -> Iterator[tuple[str, str]]:
-    c = 0
-    for _, row in df.iterrows():
-        if len(row["text"]) < 5000: # for input length limitation
-            c+=1
-            yield row["text"], row["spoiled text"]
+# Initialize an empty DataFrame to store evaluation results
+evaluation_df = pd.DataFrame(columns=['text', 'error', 'correction'])
 
-        if c == num:
-            break
+with Pool(processes=cpu_count()) as p, tqdm(total=NUM_EXAMPLES, desc="Sending API calls to GPT.") as pbar:
+    for result in p.imap_unordered(evaluate, data_generator()):
+        if result[2] is not None:
+            evaluation_df = evaluation_df.append({'text': result[0], 'error': result[1], 'correction': result[2]}, ignore_index=True)
+        pbar.update()
 
-def evaluate(lock, data: tuple[str, str]) -> None:
-    response: ChatCompletion = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {
-                "role": "user",
-                "content": f"Jsi poslušný asistent\n"
-                f"Oprav chyby v textu ak tam jsou: '{data[1]}'"
-            }
-        ]
-    )
-
-    lock.acquire()
-    with open("evaluation.csv", "a") as f:
-        writer = csv.writer(f, delimiter=";")
-        # original (valid);spoiled;corrected by GPT
-        writer.writerow((data[0], data[1], response.choices[0].message.content))
-    lock.release()
-
-g = generator(num=NUM_EXAMPLES)
-
-with open("evaluation.csv", "w") as f:
-    writer = csv.writer(f, delimiter=";")
-    writer.writerow(("text","spoiled text","correction"))
-
-with Manager() as m:
-    lock = m.Lock()
-    func = partial(evaluate, lock)
-
-    with Pool(processes=cpu_count()) as p:
-        with tqdm(total=NUM_EXAMPLES) as pbar:
-            for _ in p.imap_unordered(func, g):
-                pbar.update()
+print("Saving evaluation data...")
+evaluation_df.to_csv("evaluation.csv", sep=";", index=False)

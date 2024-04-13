@@ -45,6 +45,7 @@ def introduce_errors(text: str):
     return ' '.join(modified_words)
 
 dataset = load_from_disk(FILTERED)
+# dataset = dataset.filter(lambda x: len(x["text"]) <= 500)
 df = dataset.to_pandas()
 df = df[["text"]]
 
@@ -55,7 +56,7 @@ texts_to_modify = df.sample(frac=ERR_RATE, random_state=42).index
 
 # Introduce errors into selected texts using tqdm for progress tracking
 tqdm.pandas(desc="Introducing Errors")
-df.loc[texts_to_modify, 'label'] = df.loc[texts_to_modify, 'text'].progress_apply(introduce_errors)
+df.loc[texts_to_modify, 'error'] = df.loc[texts_to_modify, 'text'].progress_apply(introduce_errors)
 
 print("Saving dataset...")
 df.to_csv("dataset.csv", index=False, sep=";")
