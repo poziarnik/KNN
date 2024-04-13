@@ -6,19 +6,28 @@ from multiprocessing import Pool, Manager
 import pandas as pd
 from functools import partial
 from tqdm import tqdm
+import csv
+
+NUM_EXAMPLES = 10
 
 client = OpenAI(
     api_key=environ["OPENAI_API_KEY"]
 )
 
+print("Loading dataset...")
 df = pd.read_csv("dataset.csv", sep=";")
+
+print("Randomizing dataset...")
 df = df.sample(frac=1).reset_index(drop=True)
 
 def generator(num: int) -> Iterator[tuple[str, str]]:
-    for index, row in df.iterrows():
-        yield row["text"], row["spoiled text"]
+    c = 0
+    for _, row in df.iterrows():
+        if len(row["text"]) < 10000: # for input length limitation
+            c+=1
+            yield row["text"], row["spoiled text"]
 
-        if index == num:
+        if c == num:
             break
 
 def evaluate(lock, data: tuple[str, str]) -> None:
@@ -35,20 +44,21 @@ def evaluate(lock, data: tuple[str, str]) -> None:
 
     lock.acquire()
     with open("evaluation.csv", "a") as f:
-        f.write(f'"{data[0]}";{data[1]};{response.choices[0].message.content}\n')
+        writer = csv.writer(f, delimiter=";")
+        # original (valid);spoiled;corrected by GPT
+        writer.writerow((data[0], data[1], response.choices[0].message.content))
     lock.release()
 
-g = generator(num=10)
+g = generator(num=NUM_EXAMPLES)
 
-# TODO: somehow make it work using built-in csv module (between multiple processes)
 with open("evaluation.csv", "w") as f:
-    f.write(f"text;spoiled text;correction\n")
-
+    writer = csv.writer(f, delimiter=";")
+    writer.writerow(("text","spoiled text","correction"))
 
 with Manager() as m:
     lock = m.Lock()
 
     with Pool(processes=4) as p:
         func = partial(evaluate, lock)
-        for _ in tqdm(p.imap_unordered(func, g), total=10):
+        for _ in tqdm(p.imap_unordered(func, g), total=NUM_EXAMPLES):
             pass
