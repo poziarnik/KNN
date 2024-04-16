@@ -26,7 +26,7 @@ def evaluate(data: tuple[str, str]) -> tuple[str, str, str | None]:
 
     prompt = (
         f"Jsi poslušný asistent.\n"
-        f"Oprav chyby v textu, pokud tam jsou: `{error or text}`"
+        f"Oprav chyby v textu, pokud tam jsou: `{error}`"
     )
 
     response = client.chat.completions.create(

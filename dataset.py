@@ -54,6 +54,9 @@ ERR_RATE = 0.5  # 50% of texts will have errors
 # Randomly select texts to introduce errors into
 texts_to_modify = df.sample(frac=ERR_RATE, random_state=42).index
 
+text_to_not_modify = df.index.difference(texts_to_modify)
+df.loc[text_to_not_modify, 'error'] = df.loc[text_to_not_modify, 'text']
+
 # Introduce errors into selected texts using tqdm for progress tracking
 tqdm.pandas(desc="Introducing Errors")
 df.loc[texts_to_modify, 'error'] = df.loc[texts_to_modify, 'text'].progress_apply(introduce_errors)
