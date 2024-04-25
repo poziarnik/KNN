@@ -2,8 +2,11 @@ from huggingface_hub import hf_hub_download
 from datasets import load_dataset, load_from_disk
 from pathlib import Path
 import random
-import string
 from tqdm import tqdm
+import nltk
+from nltk.tokenize import sent_tokenize
+
+nltk.download('punkt')
 
 
 BASE_DATA_DIR = Path("./data")
@@ -30,36 +33,56 @@ if not FILTERED.exists():
 
 
 # Function to introduce errors into text
-def introduce_errors(text: str):
-    # Simulate introducing errors (e.g., typos, punctuation changes)
-    words = text.split(' ')
-    modified_words = []
-    for word in words:
-        if random.random() < 0.3:  # Adjust error introduction rate as needed
-            # Introduce a typo by randomly changing a character in the word
-            random_char_index = random.randint(0, len(word) - 1)
-            modified_word = word[:random_char_index] + random.choice(string.ascii_lowercase) + word[random_char_index + 1:]
-            modified_words.append(modified_word)
-        else:
-            modified_words.append(word)
-    return ' '.join(modified_words)
+def introduce_errors(text: str) -> str:
+    for _ in range(random.randint(2, 5)):
+        error_type = random.choice(['insert', 'delete'])
+        if error_type == 'insert':
+            position = random.randint(0, len(text))
+            random_char = random.choice('abcdefghijklmnopqrstuvwxyz0123456789.,!? ')
+            text = text[:position] + random_char + text[position:]
+        elif error_type == 'delete':
+            if len(text) > 0:
+                position = random.randint(0, len(text) - 1)
+                text = text[:position] + text[position+1:]
+    return text
 
 dataset = load_from_disk(FILTERED)
 # dataset = dataset.filter(lambda x: len(x["text"]) <= 500)
 df = dataset.to_pandas()
 df = df[["text"]]
 
-ERR_RATE = 0.5  # 50% of texts will have errors
 
-# Randomly select texts to introduce errors into
-texts_to_modify = df.sample(frac=ERR_RATE, random_state=42).index
+# Apply the tokenization function to the 'text' column
+print("Tokenizing dataset, into sentences...")
+df['sentences'] = df['text'].apply(lambda x: sent_tokenize(x))
 
-text_to_not_modify = df.index.difference(texts_to_modify)
-df.loc[text_to_not_modify, 'error'] = df.loc[text_to_not_modify, 'text']
+# Explode the 'sentences' column to create a single 'sentence' column
+print("Exploding dataset...")
+df = df.explode('sentences')
 
-# Introduce errors into selected texts using tqdm for progress tracking
-tqdm.pandas(desc="Introducing Errors")
-df.loc[texts_to_modify, 'error'] = df.loc[texts_to_modify, 'text'].progress_apply(introduce_errors)
+# Rename the 'sentences' column to 'sentence'
+print("Renaming dataset...")
+df.rename(columns={'sentences': 'sentence'}, inplace=True)
 
-print("Saving dataset...")
-df.to_csv("dataset.csv", index=False, sep=";")
+# Drop the 'text' column
+print("Dropping unused data...")
+df.drop(columns=['text'], inplace=True)
+
+# Reset the index
+df.reset_index(drop=True, inplace=True)
+
+for err_rate in tqdm((0.1, 0.2, 0.3, 0.4, 0.5)):
+    df_new = df.copy()
+    
+    # Randomly select texts to introduce errors into
+    sentences_to_modify = df_new.sample(frac=err_rate, random_state=42).index
+
+    sentences_to_not_modify = df_new.index.difference(sentences_to_modify)
+    df_new.loc[sentences_to_not_modify, 'error'] = df_new.loc[sentences_to_not_modify, 'sentence']
+
+    # Introduce errors into selected texts using tqdm for progress tracking
+    tqdm.pandas(desc="Introducing Errors")
+    df_new.loc[sentences_to_modify, 'error'] = df_new.loc[sentences_to_modify, 'sentence'].progress_apply(introduce_errors)
+    
+    print("Saving dataset...")
+    df_new.to_csv(f"dataset-{err_rate}.csv", index=False, sep=";")
