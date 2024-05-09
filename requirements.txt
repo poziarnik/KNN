@@ -6,4 +6,7 @@ requests==2.31.0
 pandas==2.2.1
 datasets==2.18.0
 nltk==3.8.1
-swifter==1.4.0
+pandarallel==1.6.5
+ipywidgets
+widgetsnbextension
+pandas-profiling

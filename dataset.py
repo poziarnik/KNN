@@ -1,23 +1,17 @@
+import random
+import nltk
+import string
+
 from huggingface_hub import hf_hub_download
 from datasets import load_dataset, load_from_disk, set_caching_enabled
 from pathlib import Path
-import random
+from nltk.tokenize import sent_tokenize
+from pandarallel import pandarallel
 from tqdm import tqdm
-import nltk
-from nltk.tokenize import sent_tokenize, word_tokenize
-import swifter
-from swifter import set_defaults
-import string
 
+tqdm.pandas()
 
-set_defaults(
-    dask_threshold=1,
-    scheduler="processes",
-    progress_bar=True,
-    progress_bar_desc=None,
-    allow_dask_on_strings=False,
-    force_parallel=False,
-)
+pandarallel.initialize(progress_bar=True)
 
 set_caching_enabled(False)
 
@@ -31,6 +25,8 @@ REPO_ID = "BUT-FIT/BUT-LCC"
 FILE_NAME = "train_0.jsonl.gz"
 
 FILTERED = BASE_DATA_DIR / "cs-wiki"
+
+NUM_EXAMPLES = 100000
 
 if not FILTERED.exists():
     print("Downloading dataset...")
@@ -71,7 +67,7 @@ def introduce_errors(original: list[str]) -> tuple[list[str], list[int]]:
         elif error_type == 'delete':
             if len(words) > 0:
                 if len(words[word_position]) > 1:
-                    words[word_position] = words[word_position][:char_position - 1] + words[word_position][char_position:]
+                    words[word_position] = words[word_position][:char_position] + words[word_position][char_position + 1:]
                     labels[word_position] = 1
 
     return words, labels
@@ -84,14 +80,14 @@ def tokenize_and_remove_punctuation(text):
     return sentences
 
 dataset = load_from_disk(FILTERED, keep_in_memory=False)
-# dataset = dataset.filter(lambda x: len(x["text"]) <= 500)
+# dataset = dataset.select(range(NUM_EXAMPLES))
 
 df = dataset.to_pandas()
 df = df[["text"]]
 
 # Apply the tokenization function to the 'text' column
 print("Tokenizing text, into sentences")
-df['sentences'] = df['text'].swifter.apply(tokenize_and_remove_punctuation)
+df['sentences'] = df['text'].parallel_apply(tokenize_and_remove_punctuation)
 
 # Drop the 'text' column
 print("Dropping unused data...")
@@ -105,7 +101,7 @@ df = df.explode('sentences')
 df.reset_index(drop=True, inplace=True)
 
 print("Tokenizing sentences, into words")
-df['sentences'] = df['sentences'].swifter.apply(lambda x: x.split(' '))
+df['sentences'] = df['sentences'].parallel_apply(lambda x: x.split(' '))
 
 # Rename the 'sentences' column to 'sentence'
 print("Renaming dataset...")
@@ -117,17 +113,16 @@ df.reset_index(drop=True, inplace=True)
 # create labels
 print("Creating labels...")
 df['error'] = df['sentence']
-df['labels'] = df['sentence'].swifter.apply(lambda x: [0 for _ in range(len(x))])
+df['labels'] = df['sentence'].progress_apply(lambda x: [0 for _ in range(len(x))])
 
 # Reset the index
 df.reset_index(drop=True, inplace=True)
 
 # filter dataset
-NUM_EXAMPLES = 100000
 df = df.sample(n=NUM_EXAMPLES, random_state=42)
 df.reset_index(drop=True, inplace=True)
 
-for err_rate in tqdm((0.5, 0.8)):
+for err_rate in (0.5, 0.8):
     df_new = df.copy()
 
     # Randomly select texts to introduce errors into
@@ -135,7 +130,7 @@ for err_rate in tqdm((0.5, 0.8)):
 
     # Introduce errors into selected texts using tqdm for progress tracking
     print("Introducing errors")
-    pd_tuple = df_new.loc[sentences_to_modify, 'sentence'].swifter.apply(introduce_errors)
+    pd_tuple = df_new.loc[sentences_to_modify, 'sentence'].parallel_apply(introduce_errors).to_list()
     for i, result in enumerate(pd_tuple):
         error, labels = result[0], result[1]
         df_new.at[sentences_to_modify[i], 'error'] = error
@@ -150,7 +145,7 @@ for err_rate in tqdm((0.5, 0.8)):
     test = df_new.drop(train.index).drop(validate.index)
 
     # Save datasets
-    print("Saving datasets...")
+    print("Saving dataset...")
 
     dir = (BASE_DATA_DIR / f"err-{err_rate}")
     dir.mkdir(parents=True, exist_ok=True)
