@@ -4,10 +4,12 @@ from pathlib import Path
 import random
 from tqdm import tqdm
 import nltk
-from nltk.tokenize import sent_tokenize
-import pandas as pd
+from nltk.tokenize import sent_tokenize, word_tokenize
 import swifter
 from swifter import set_defaults
+import numpy as np
+
+
 set_defaults(
     dask_threshold=1,
     scheduler="processes",
@@ -54,7 +56,7 @@ def introduce_errors(original: list[str]) -> tuple[list[str], list[int]]:
     # 1 - incorrect
     labels: list[int] = [0 for _ in range(len(words))]
 
-    for _ in range(random.randint(2, 5)):
+    for _ in range(random.randint(3, 6)):
         error_type = random.choice(['insert', 'delete'])
         word_position = random.randint(0, len(words) - 1)
         char_position = random.randint(0, len(words[word_position]))
@@ -96,7 +98,7 @@ df = df.explode('sentences')
 df.reset_index(drop=True, inplace=True)
 
 print("Tokenizing sentences, into words")
-df['sentences'] = df['sentences'].swifter.apply(lambda x: nltk.tokenize.word_tokenize(x))
+df['sentences'] = df['sentences'].swifter.apply(lambda x: word_tokenize(x))
 
 # Rename the 'sentences' column to 'sentence'
 print("Renaming dataset...")
@@ -113,7 +115,12 @@ df['labels'] = df['sentence'].swifter.apply(lambda x: [0 for _ in range(len(x))]
 # Reset the index
 df.reset_index(drop=True, inplace=True)
 
-for err_rate in tqdm((0.5, )):
+# filter dataset
+NUM_EXAMPLES = 100000
+df = df.sample(n=NUM_EXAMPLES, random_state=42)
+df.reset_index(drop=True, inplace=True)
+
+for err_rate in tqdm((0.5, 0.8)):
     df_new = df.copy()
 
     # Randomly select texts to introduce errors into
@@ -127,5 +134,20 @@ for err_rate in tqdm((0.5, )):
         df_new.at[sentences_to_modify[i], 'error'] = error
         df_new.at[sentences_to_modify[i], 'labels'] = labels
 
-    print("Saving dataset...")
-    df_new.to_json(BASE_DATA_DIR / f"dataset-{err_rate}.json", index=False, lines=True, orient="records")
+    # Reset the index
+    df_new.reset_index(drop=True, inplace=True)
+
+    # Split dataset into train, validate, and test
+    train = df_new.sample(frac=0.8)
+    validate = (df_new.drop(train.index)).sample(frac=0.5)
+    test = df_new.drop(train.index).drop(validate.index)
+
+    # Save datasets
+    print("Saving datasets...")
+
+    dir = (BASE_DATA_DIR / f"err-{err_rate}")
+    dir.mkdir(parents=True, exist_ok=True)
+
+    train.to_json(dir / "train.json", index=False, lines=True, orient="records")
+    validate.to_json(dir / "validate.json", index=False, lines=True, orient="records")
+    test.to_json(dir / "test.json", index=False, lines=True, orient="records")
