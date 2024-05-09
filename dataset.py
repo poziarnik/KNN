@@ -7,7 +7,7 @@ import nltk
 from nltk.tokenize import sent_tokenize, word_tokenize
 import swifter
 from swifter import set_defaults
-import numpy as np
+import string
 
 
 set_defaults(
@@ -61,7 +61,7 @@ def introduce_errors(original: list[str]) -> tuple[list[str], list[int]]:
         word_position = random.randint(0, len(words) - 1)
         char_position = random.randint(0, len(words[word_position]))
         if error_type == 'insert':
-            random_char = random.choice('abcdefghijklmnopqrstuvwxyz0123456789.,!? ')
+            random_char = random.choice(string.ascii_letters + string.digits + ' ')
             if random_char == ' ':
                 words = words[:word_position] + [words[word_position][:char_position]] + [words[word_position][char_position:]] + words[word_position:]
                 labels = labels[:word_position] + [1, 1] + labels[word_position:]
@@ -76,6 +76,13 @@ def introduce_errors(original: list[str]) -> tuple[list[str], list[int]]:
 
     return words, labels
 
+def tokenize_and_remove_punctuation(text):
+    # Tokenize text into sentences
+    sentences = sent_tokenize(text)
+    # Remove punctuation from each sentence
+    sentences = [''.join(c for c in s if c not in string.punctuation) for s in sentences]
+    return sentences
+
 dataset = load_from_disk(FILTERED, keep_in_memory=False)
 # dataset = dataset.filter(lambda x: len(x["text"]) <= 500)
 
@@ -84,7 +91,7 @@ df = df[["text"]]
 
 # Apply the tokenization function to the 'text' column
 print("Tokenizing text, into sentences")
-df['sentences'] = df['text'].swifter.apply(lambda x: sent_tokenize(x))
+df['sentences'] = df['text'].swifter.apply(tokenize_and_remove_punctuation)
 
 # Drop the 'text' column
 print("Dropping unused data...")
@@ -98,7 +105,7 @@ df = df.explode('sentences')
 df.reset_index(drop=True, inplace=True)
 
 print("Tokenizing sentences, into words")
-df['sentences'] = df['sentences'].swifter.apply(lambda x: word_tokenize(x))
+df['sentences'] = df['sentences'].swifter.apply(lambda x: x.split(' '))
 
 # Rename the 'sentences' column to 'sentence'
 print("Renaming dataset...")
