@@ -150,6 +150,6 @@ for err_rate in (0.5, 0.8):
     dir = (BASE_DATA_DIR / f"err-{err_rate}")
     dir.mkdir(parents=True, exist_ok=True)
 
-    train.to_json(dir / "train.json", index=False, lines=True, orient="records")
-    validate.to_json(dir / "validate.json", index=False, lines=True, orient="records")
-    test.to_json(dir / "test.json", index=False, lines=True, orient="records")
+    train.to_json(dir / "train.jsonl", index=False, lines=True, orient="records")
+    validate.to_json(dir / "validate.jsonl", index=False, lines=True, orient="records")
+    test.to_json(dir / "test.jsonl", index=False, lines=True, orient="records")

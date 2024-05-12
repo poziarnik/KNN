@@ -5,6 +5,7 @@ from multiprocessing import Pool, cpu_count
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
+from time import sleep
 
 # Set your OpenAI API key
 client = OpenAI(api_key=environ["OPENAI_API_KEY"])
@@ -17,6 +18,7 @@ def data_generator() -> Iterator[tuple[str, str]]:
 
 # Function to evaluate text using OpenAI API
 def evaluate(data: tuple[str, str]) -> tuple[str, str, str | None]:
+    sleep(2)
     sentence, error = data
 
     prompt = (
@@ -34,7 +36,6 @@ def evaluate(data: tuple[str, str]) -> tuple[str, str, str | None]:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
-            timeout=30
         )
     except Exception:
         return sentence, error, None
@@ -44,7 +45,7 @@ def evaluate(data: tuple[str, str]) -> tuple[str, str, str | None]:
     return sentence, error, corrected_text
 
 # find dataset
-file = Path("data/err-0.5/test.json")
+file = Path("data/err-0.5/test.jsonl")
 
 print(f"Loading {file.name}...")
 df = pd.read_json(file, orient="records", lines=True)
@@ -52,16 +53,16 @@ df = pd.read_json(file, orient="records", lines=True)
 df[["sentence", "error"]] = df.apply(lambda row: (" ".join(row["sentence"]), " ".join(row["error"])), axis=1, result_type="expand")
 
 # print("Randomizing dataset...")
-df = df.sample(frac=0.5).reset_index(drop=True)
+df = df.sample(frac=0.4).reset_index(drop=True)
 
 # Initialize an empty DataFrame to store evaluation results
-evaluation_df = pd.DataFrame(columns=['sentence', 'error', 'correction'])
+evaluation_df = pd.DataFrame(columns=['sentence', 'error', 'corrected'])
 
 with Pool(processes=cpu_count()) as p, tqdm(total=len(df), desc="Sending API calls to GPT.") as pbar:
     for result in p.imap_unordered(evaluate, data_generator()):
         if result[2] is not None:
-            evaluation_df = evaluation_df._append({'sentence': result[0], 'error': result[1], 'correction': result[2]}, ignore_index=True)
+            evaluation_df = evaluation_df._append({'sentence': result[0], 'error': result[1], 'corrected': result[2]}, ignore_index=True)
         pbar.update()
 
 print("Saving evaluation data...")
-evaluation_df.to_json(f"evaluation-{file.name}", orient="records", lines=True, index=False)
+evaluation_df.to_json("gpt-evaluation.jsonl", orient="records", lines=True, index=False)
