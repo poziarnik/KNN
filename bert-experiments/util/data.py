@@ -19,8 +19,6 @@ def masked_correct(df: pd.DataFrame) -> pd.DataFrame:
     index = df[df["masked"].notnull()].index
     _df = df.loc[index]
 
-    _df.to_json("tmp.jsonl", orient="records", lines=True)
-
     _df["corrected"] = _df.apply(_correct_row, axis=1)
     df.loc[index] = _df
     

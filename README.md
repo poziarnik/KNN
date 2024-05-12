@@ -25,3 +25,4 @@ Saving evaluation data...
 ```
 
 ## Experiments
+Experiments evaluations can be found in [evaluation.ipynb](./evaluation.ipynb)

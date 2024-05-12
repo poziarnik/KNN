@@ -10,3 +10,5 @@ pandarallel==1.6.5
 ipywidgets
 widgetsnbextension
 pandas-profiling
+autocorrect==2.6.1
+seaborn==0.13.2
